@@ -1,21 +1,24 @@
 import React, { useState } from 'react';
 import { 
   Activity, 
-  CheckCircle, 
   Target, 
   ChevronDown, 
   ChevronRight,
   Megaphone,
   Zap,
-  Check,
   Layers,
   Edit3,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  MoreHorizontal,
+  Trash2,
+  Copy,
+  Info
 } from 'lucide-react';
 
 /**
+ * @typedef {'NEW' | 'QUALIFIED' | 'CONVERTED'} LeadStage
  * @typedef {'phone' | 'form'} LeadSourceType
- * @typedef {'new' | 'qualified' | 'converted'} LeadDisposition
  * @typedef {'enabled' | 'paused'} CampaignStatus
  * 
  * @typedef {Object} GoogleCampaign
@@ -27,105 +30,218 @@ import {
  * @property {string} id
  * @property {string} name
  * @property {string} googleEventName
+ * @property {LeadStage} stage
  * @property {LeadSourceType} sourceType
+ * @property {number} value
  * @property {boolean} isEnabled
  * 
- * @typedef {Object} GoogleCustomGoal
+ * @typedef {Object} GoogleGoal
+ * @property {string} id
+ * @property {LeadStage} stage
+ * @property {string} name
+ * @property {string} description
+ * @property {GoogleConversionAction[]} conversionActions
+ * 
+ * @typedef {Object} CampaignAssignment
+ * @property {string} campaignId
+ * @property {LeadStage} activeStage
+ * 
+ * @typedef {Object} GoogleSignalCluster
  * @property {string} id
  * @property {string} name
  * @property {string} description
- * @property {string[]} assignedCampaignIds // Array of campaign IDs assigned to this goal
- * @property {GoogleConversionAction[]} conversionActions
+ * @property {GoogleGoal[]} goals
+ * @property {CampaignAssignment[]} campaignAssignments
  */
 
 const MOCK_CAMPAIGNS = [
-  { id: 'c1', name: 'Search - Brand', status: 'enabled' },
-  { id: 'c2', name: 'Search - Competitor', status: 'enabled' },
-  { id: 'c3', name: 'Display - Retargeting', status: 'paused' },
-  { id: 'c4', name: 'YouTube - Awareness', status: 'enabled' },
-  { id: 'c5', name: 'PMax - General', status: 'enabled' },
+  { id: "c1", name: "Search – Brand", status: "enabled" },
+  { id: "c2", name: "Search – Emergency Plumbing", status: "enabled" },
+  { id: "c3", name: "YouTube – Awareness", status: "enabled" },
+  { id: "c4", name: "Search – Basement Plumbing", status: "paused" },
 ];
 
-const MOCK_GOOGLE_CUSTOM_GOALS = [
+const createDefaultGoals = () => [
   {
-    id: 'goal_new',
+    id: `g_new_${Math.random().toString(36).substr(2, 9)}`,
+    stage: 'NEW',
     name: 'New Lead',
-    description: 'Fires when a new lead is created via phone or form.',
-    assignedCampaignIds: ['c1', 'c2'],
+    description: 'Fires when a new lead is created.',
     conversionActions: [
-      { id: 'ca_new_phone', name: 'New Lead – Phone Call', googleEventName: 'new_lead_phone_call', sourceType: 'phone', isEnabled: true },
-      { id: 'ca_new_form', name: 'New Lead – Form Submission', googleEventName: 'new_lead_form_submit', sourceType: 'form', isEnabled: true },
+      { id: `ca_new_phone_${Math.random().toString(36).substr(2, 9)}`, name: 'New Lead – Phone Call', googleEventName: 'new_lead_phone', stage: 'NEW', sourceType: 'phone', value: 1, isEnabled: true },
+      { id: `ca_new_form_${Math.random().toString(36).substr(2, 9)}`, name: 'New Lead – Form Submission', googleEventName: 'new_lead_form', stage: 'NEW', sourceType: 'form', value: 1, isEnabled: true },
     ]
   },
   {
-    id: 'goal_qual',
+    id: `g_qual_${Math.random().toString(36).substr(2, 9)}`,
+    stage: 'QUALIFIED',
     name: 'Qualified Lead',
-    description: 'Fires when a lead status changes to Qualified.',
-    assignedCampaignIds: ['c3'],
+    description: 'Fires when lead status becomes Qualified.',
     conversionActions: [
-      { id: 'ca_qual_phone', name: 'Qualified Lead – Phone Call', googleEventName: 'qualified_lead_phone', sourceType: 'phone', isEnabled: true },
-      { id: 'ca_qual_form', name: 'Qualified Lead – Form Submission', googleEventName: 'qualified_lead_form', sourceType: 'form', isEnabled: true },
+      { id: `ca_qual_phone_${Math.random().toString(36).substr(2, 9)}`, name: 'Qualified Lead – Phone Call', googleEventName: 'qual_lead_phone', stage: 'QUALIFIED', sourceType: 'phone', value: 10, isEnabled: true },
+      { id: `ca_qual_form_${Math.random().toString(36).substr(2, 9)}`, name: 'Qualified Lead – Form Submission', googleEventName: 'qual_lead_form', stage: 'QUALIFIED', sourceType: 'form', value: 10, isEnabled: true },
     ]
   },
   {
-    id: 'goal_conv',
+    id: `g_conv_${Math.random().toString(36).substr(2, 9)}`,
+    stage: 'CONVERTED',
     name: 'Converted Lead',
-    description: 'Fires when a lead marks as Converted (Sale).',
-    assignedCampaignIds: [],
+    description: 'Fires when lead is Converted (Sale).',
     conversionActions: [
-      { id: 'ca_conv_phone', name: 'Converted Lead – Phone Call', googleEventName: 'converted_lead_phone', sourceType: 'phone', isEnabled: true },
-      { id: 'ca_conv_form', name: 'Converted Lead – Form Submission', googleEventName: 'converted_lead_form', sourceType: 'form', isEnabled: true },
+      { id: `ca_conv_phone_${Math.random().toString(36).substr(2, 9)}`, name: 'Converted Lead – Phone Call', googleEventName: 'conv_lead_phone', stage: 'CONVERTED', sourceType: 'phone', value: 100, isEnabled: true },
+      { id: `ca_conv_form_${Math.random().toString(36).substr(2, 9)}`, name: 'Converted Lead – Form Submission', googleEventName: 'conv_lead_form', stage: 'CONVERTED', sourceType: 'form', value: 100, isEnabled: true },
     ]
   }
 ];
 
+const INITIAL_CLUSTERS = [
+  {
+    id: "cluster_default",
+    name: "Default Service",
+    description: "Standard conversion ladder for general services.",
+    campaignAssignments: [
+      { campaignId: "c1", activeStage: "NEW" },
+      { campaignId: "c3", activeStage: "NEW" }
+    ],
+    goals: createDefaultGoals()
+  },
+  {
+    id: "cluster_emergency",
+    name: "Emergency Plumbing",
+    description: "High-value emergency leads.",
+    campaignAssignments: [
+      { campaignId: "c2", activeStage: "QUALIFIED" }
+    ],
+    goals: createDefaultGoals()
+  }
+];
+
+const STAGE_LABELS = {
+  NEW: 'New Lead',
+  QUALIFIED: 'Qualified Lead',
+  CONVERTED: 'Converted Lead'
+};
+
 const ClientSignals = ({ client }) => {
-  const [goals, setGoals] = useState(MOCK_GOOGLE_CUSTOM_GOALS);
-  const [expandedGoalId, setExpandedGoalId] = useState('goal_new');
-  const [editingCampaignsForGoalId, setEditingCampaignsForGoalId] = useState(null);
-
-  // This replaces "Active Goal" logic. Now "Active" effectively means "Has assigned campaigns"
-  // or simply "Is expanded/being managed". The prompt implies we keep the "Active Goal" badge visual
-  // but tied to campaign assignment. Let's assume if campaigns > 0, it's "In Use".
+  // TODO: Load clusters, goals, actions, and campaign assignments from backend for this client.
+  const [clusters, setClusters] = useState(INITIAL_CLUSTERS);
+  const [expandedClusterId, setExpandedClusterId] = useState(null);
   
-  // Helper to move campaign between goals
-  const handleAssignCampaign = (campaignId, targetGoalId) => {
-    setGoals(prevGoals => {
-      // 1. Remove campaign from ALL goals
-      const cleanedGoals = prevGoals.map(g => ({
-        ...g,
-        assignedCampaignIds: g.assignedCampaignIds.filter(cid => cid !== campaignId)
-      }));
+  // New Cluster Dialog State
+  const [isCreatingCluster, setIsCreatingCluster] = useState(false);
+  const [newClusterName, setNewClusterName] = useState('');
+  const [newClusterDesc, setNewClusterDesc] = useState('');
 
-      // 2. If targetGoalId is provided (checking the box), add it there
-      // If unchecked (targetGoalId matches current assignment), we effectively removed it above.
-      // Wait, typical checkbox logic: if checked, add to this goal. If unchecked, just remove.
-      // But we also need to ensure it's removed from others.
-      
-      // Let's simplify: We are inside the context of `targetGoalId`.
-      // If `campaignId` is currently in `targetGoalId`, we remove it.
-      // If `campaignId` is NOT in `targetGoalId`, we add it (and remove from others).
-      
-      const currentGoal = prevGoals.find(g => g.id === targetGoalId);
-      const isCurrentlyAssignedToTarget = currentGoal.assignedCampaignIds.includes(campaignId);
+  const toggleCluster = (id) => {
+    setExpandedClusterId(prev => prev === id ? null : id);
+  };
 
-      if (isCurrentlyAssignedToTarget) {
-        // Just remove it (it becomes unassigned)
-        return cleanedGoals; 
-      } else {
-        // Add to target
-        return cleanedGoals.map(g => 
-          g.id === targetGoalId 
-            ? { ...g, assignedCampaignIds: [...g.assignedCampaignIds, campaignId] }
-            : g
-        );
-      }
+  const handleCreateCluster = () => {
+    if (!newClusterName.trim()) return;
+    
+    const newCluster = {
+      id: `cluster_${Date.now()}`,
+      name: newClusterName,
+      description: newClusterDesc,
+      campaignAssignments: [],
+      goals: createDefaultGoals()
+    };
+
+    setClusters(prev => [...prev, newCluster]);
+    setIsCreatingCluster(false);
+    setNewClusterName('');
+    setNewClusterDesc('');
+    setExpandedClusterId(newCluster.id);
+  };
+
+  const handleDeleteCluster = (clusterId) => {
+    setClusters(prev => prev.filter(c => c.id !== clusterId));
+  };
+
+  const handleDuplicateCluster = (clusterId) => {
+    const clusterToCopy = clusters.find(c => c.id === clusterId);
+    if (!clusterToCopy) return;
+
+    const newCluster = {
+      ...clusterToCopy,
+      id: `cluster_${Date.now()}`,
+      name: `${clusterToCopy.name} (Copy)`,
+      campaignAssignments: [], // Don't copy assignments
+      goals: createDefaultGoals() // Re-create goals to have unique IDs
+      // Ideally we should copy values from the source cluster, but for now defaults are fine or deep clone if needed
+    };
+    
+    // Deep clone values
+    newCluster.goals = clusterToCopy.goals.map(g => ({
+      ...g,
+      id: `g_${Math.random().toString(36).substr(2, 9)}`,
+      conversionActions: g.conversionActions.map(a => ({
+        ...a,
+        id: `ca_${Math.random().toString(36).substr(2, 9)}`
+      }))
+    }));
+
+    setClusters(prev => [...prev, newCluster]);
+  };
+
+  // TODO: Persist campaign→cluster→stage mapping and ensure only one cluster is active per campaign at backend layer.
+  const assignCampaignToCluster = (clusterId, campaignId, activeStage) => {
+    setClusters(prev => {
+      return prev.map(cluster => {
+        if (cluster.id === clusterId) {
+          const existing = cluster.campaignAssignments.find(ca => ca.campaignId === campaignId);
+          let updatedAssignments;
+          
+          if (existing) {
+            updatedAssignments = cluster.campaignAssignments.map(ca => 
+              ca.campaignId === campaignId ? { ...ca, activeStage } : ca
+            );
+          } else {
+            updatedAssignments = [...cluster.campaignAssignments, { campaignId, activeStage }];
+          }
+          return { ...cluster, campaignAssignments: updatedAssignments };
+        }
+        
+        // Remove this campaign from all other clusters
+        return {
+          ...cluster,
+          campaignAssignments: cluster.campaignAssignments.filter(ca => ca.campaignId !== campaignId),
+        };
+      });
     });
   };
 
-  const toggleGoalAccordion = (id) => {
-    setExpandedGoalId(prev => prev === id ? null : id);
-    setEditingCampaignsForGoalId(null); // Close edit mode when collapsing/switching
+  const removeCampaignFromCluster = (clusterId, campaignId) => {
+    setClusters(prev => prev.map(c => {
+      if (c.id === clusterId) {
+        return {
+          ...c,
+          campaignAssignments: c.campaignAssignments.filter(ca => ca.campaignId !== campaignId)
+        };
+      }
+      return c;
+    }));
+  };
+
+  // TODO: Persist updated conversion values and sync these to Google Ads.
+  const updateConversionActionValue = (clusterId, goalId, actionId, value) => {
+    setClusters(prev => 
+      prev.map(cluster => {
+        if (cluster.id !== clusterId) return cluster;
+        return {
+          ...cluster,
+          goals: cluster.goals.map(goal => {
+            if (goal.id !== goalId) return goal;
+            return {
+              ...goal,
+              conversionActions: goal.conversionActions.map(action => 
+                action.id === actionId ? { ...action, value } : action
+              )
+            };
+          })
+        };
+      })
+    );
   };
 
   return (
@@ -135,198 +251,323 @@ const ClientSignals = ({ client }) => {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Signals for {client.name}</h1>
         <p className="text-slate-500 mt-1">
-          Manage custom goals and campaign optimization targets.
+          Manage Google Ads signal clusters and campaign optimization targets.
         </p>
       </div>
 
-      {/* Helper Info */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 flex gap-3">
-        <Activity className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-        <div className="text-sm text-indigo-900">
-          <p className="font-medium mb-1">Campaign Optimization</p>
-          <p className="opacity-90">
-            Assign <strong>Custom Goals</strong> to specific campaigns. 
-            A campaign can only optimize toward one goal at a time.
-          </p>
+      {/* Automatic Mapping Info Box */}
+      {/* TODO: Implement backend flow to map (campaign, disposition, sourceType) to a GoogleConversionAction and fire offline conversions with the configured value. */}
+      <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3">
+        <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-900">
+          <p className="font-medium mb-1">How conversions fire</p>
+          <div className="space-y-1.5 opacity-90">
+             <p>1. A lead enters Ockno from your CRM. We identify the originating campaign.</p>
+             <p>2. When you update the lead’s status in Contacts (New, Qualified, Converted), we:</p>
+             <ul className="list-disc list-inside ml-1 space-y-0.5">
+               <li>Find the campaign’s <strong>Signal Cluster</strong> and active stage.</li>
+               <li>Look up the correct conversion action (Phone vs Form).</li>
+               <li>Send an offline conversion to Google Ads using that action’s value.</li>
+             </ul>
+             <p className="mt-2 text-xs text-blue-700 font-medium">No manual mapping needed. Just assign campaigns to clusters.</p>
+          </div>
         </div>
       </div>
 
       {/* Google Ads Section */}
       <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="bg-white p-1.5 rounded shadow-sm border border-gray-200">
-             {/* Placeholder Google G Icon */}
-             <svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
-               <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
-                 <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
-                 <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
-                 <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.734 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" />
-                 <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" />
-               </g>
-             </svg>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-white p-1.5 rounded shadow-sm border border-gray-200">
+               {/* Google G Icon */}
+               <svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+                 <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+                   <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
+                   <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
+                   <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.734 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" />
+                   <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" />
+                 </g>
+               </svg>
+            </div>
+            <h2 className="text-lg font-semibold text-slate-900">Google Ads – Signal Clusters</h2>
           </div>
-          <h2 className="text-lg font-semibold text-slate-900">Google Ads</h2>
+
+          <button 
+            onClick={() => setIsCreatingCluster(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            <Plus size={16} />
+            New Cluster
+          </button>
         </div>
 
+        {/* Create Cluster Dialog (Inline) */}
+        {isCreatingCluster && (
+          <div className="bg-white border border-indigo-200 p-4 rounded-xl shadow-sm space-y-3 mb-4 animate-in fade-in slide-in-from-top-2">
+             <h3 className="font-semibold text-slate-900">Create New Cluster</h3>
+             <div className="grid gap-3">
+               <div>
+                 <label className="block text-xs font-medium text-slate-700 mb-1">Cluster Name</label>
+                 <input 
+                   type="text" 
+                   value={newClusterName}
+                   onChange={e => setNewClusterName(e.target.value)}
+                   placeholder="e.g. Basement Waterproofing"
+                   className="w-full text-sm rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500"
+                   autoFocus
+                 />
+               </div>
+               <div>
+                 <label className="block text-xs font-medium text-slate-700 mb-1">Description (Optional)</label>
+                 <input 
+                   type="text" 
+                   value={newClusterDesc}
+                   onChange={e => setNewClusterDesc(e.target.value)}
+                   placeholder="e.g. For high-intent local search campaigns"
+                   className="w-full text-sm rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500"
+                 />
+               </div>
+               <div className="flex justify-end gap-2 pt-2">
+                 <button 
+                   onClick={() => setIsCreatingCluster(false)}
+                   className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800"
+                 >
+                   Cancel
+                 </button>
+                 <button 
+                   onClick={handleCreateCluster}
+                   disabled={!newClusterName.trim()}
+                   className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                 >
+                   Create Cluster
+                 </button>
+               </div>
+             </div>
+          </div>
+        )}
+
         <div className="grid gap-4">
-          {goals.map(goal => {
-            const assignedCampaigns = MOCK_CAMPAIGNS.filter(c => goal.assignedCampaignIds.includes(c.id));
-            const isExpanded = expandedGoalId === goal.id;
-            const isActive = assignedCampaigns.length > 0; // Visual "Active Goal" state based on usage
-            const isEditingCampaigns = editingCampaignsForGoalId === goal.id;
+          {clusters.map(cluster => {
+            const isExpanded = expandedClusterId === cluster.id;
+            
+            // Calculate most common stage
+            const stageCounts = cluster.campaignAssignments.reduce((acc, curr) => {
+              acc[curr.activeStage] = (acc[curr.activeStage] || 0) + 1;
+              return acc;
+            }, {});
+            const mostCommonStage = Object.keys(stageCounts).reduce((a, b) => stageCounts[a] > stageCounts[b] ? a : b, null);
 
             return (
               <div 
-                key={goal.id} 
-                className={`bg-white border rounded-xl shadow-sm overflow-hidden transition-all ${isActive ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-gray-200'}`}
+                key={cluster.id} 
+                className={`bg-white border rounded-xl shadow-sm overflow-hidden transition-all ${isExpanded ? 'ring-1 ring-indigo-500 border-indigo-500' : 'border-gray-200'}`}
               >
-                {/* Goal Header */}
-                <div 
-                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => toggleGoalAccordion(goal.id)}
-                >
-                  <div className="flex items-center gap-4">
+                {/* Cluster Header */}
+                <div className="p-5">
+                  <div className="flex items-start justify-between">
                     <div 
-                      className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}
+                      className="flex items-start gap-4 cursor-pointer flex-1"
+                      onClick={() => toggleCluster(cluster.id)}
                     >
-                      <Target size={20} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-base font-semibold text-slate-900">{goal.name}</h3>
-                        {isActive && (
-                          <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">
-                            Active Goal
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
+                        <Layers size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-900">{cluster.name}</h3>
+                        <p className="text-sm text-slate-500 mt-0.5">{cluster.description || 'No description'}</p>
+                        
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                            {cluster.campaignAssignments.length} campaign{cluster.campaignAssignments.length !== 1 && 's'}
                           </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-slate-500 mt-0.5">{goal.description}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    {/* Preview of assigned campaigns */}
-                    {assignedCampaigns.length > 0 ? (
-                      <div className="hidden sm:flex items-center gap-2">
-                        <div className="flex -space-x-2">
-                          {assignedCampaigns.slice(0, 3).map(c => (
-                            <div key={c.id} className="w-6 h-6 rounded-full bg-indigo-50 border border-white flex items-center justify-center text-[10px] font-medium text-indigo-600" title={c.name}>
-                              {c.name.charAt(0)}
-                            </div>
-                          ))}
+                          {mostCommonStage && (
+                            <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                              Optimizing for: {STAGE_LABELS[mostCommonStage]}
+                            </span>
+                          )}
                         </div>
-                        <span className="text-xs text-slate-500">
-                          {assignedCampaigns.length} campaign{assignedCampaigns.length !== 1 && 's'}
-                        </span>
                       </div>
-                    ) : (
-                      <span className="hidden sm:block text-xs text-slate-400 italic">No campaigns assigned</span>
-                    )}
-                    
-                    <div className="text-slate-400">
-                      {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                       {/* Menu Actions (Simplified) */}
+                       <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => handleDuplicateCluster(cluster.id)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-slate-50"
+                            title="Duplicate Cluster"
+                          >
+                            <Copy size={16} />
+                          </button>
+                          {cluster.campaignAssignments.length === 0 && (
+                            <button 
+                              onClick={() => handleDeleteCluster(cluster.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-slate-50"
+                              title="Delete Cluster"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                       </div>
+                       <button 
+                         onClick={() => toggleCluster(cluster.id)}
+                         className="p-1 text-slate-400 hover:text-slate-600"
+                       >
+                         {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Goal Details (Accordion Body) */}
+                {/* Expanded Content */}
                 {isExpanded && (
                   <div className="px-5 pb-5 pt-0 border-t border-gray-100 bg-gray-50/50">
                     
-                    {/* Campaign Assignment Section */}
+                    {/* 3.1 Campaigns in this cluster */}
                     <div className="mt-5 bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="mb-4">
                         <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                          <Layers size={16} className="text-indigo-600" />
+                          <Megaphone size={16} className="text-indigo-600" />
                           Assigned Campaigns
                         </h4>
-                        <button 
-                          onClick={() => setEditingCampaignsForGoalId(prev => prev === goal.id ? null : goal.id)}
-                          className={`text-xs font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors ${isEditingCampaigns ? 'text-indigo-600 bg-indigo-50' : 'text-slate-500'}`}
-                        >
-                          <Edit3 size={12} />
-                          {isEditingCampaigns ? 'Done Editing' : 'Manage Assignments'}
-                        </button>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Choose which campaigns belong to this service/ICP and which stage each one optimizes for.
+                        </p>
                       </div>
 
-                      {isEditingCampaigns ? (
-                        <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                          {MOCK_CAMPAIGNS.map(campaign => {
-                            const assignedToThis = goal.assignedCampaignIds.includes(campaign.id);
-                            const assignedToOther = !assignedToThis && goals.some(g => g.id !== goal.id && g.assignedCampaignIds.includes(campaign.id));
-                            const otherGoalName = assignedToOther ? goals.find(g => g.assignedCampaignIds.includes(campaign.id))?.name : '';
-
-                            return (
-                              <label 
-                                key={campaign.id} 
-                                className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-all ${assignedToThis ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <input 
-                                    type="checkbox" 
-                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                    checked={assignedToThis}
-                                    onChange={() => handleAssignCampaign(campaign.id, goal.id)}
-                                  />
-                                  <div>
-                                    <p className={`text-sm font-medium ${assignedToThis ? 'text-indigo-900' : 'text-slate-700'}`}>{campaign.name}</p>
+                      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                        {MOCK_CAMPAIGNS.map(campaign => {
+                          const assignment = cluster.campaignAssignments.find(ca => ca.campaignId === campaign.id);
+                          const isAssignedToThis = !!assignment;
+                          
+                          // Check if assigned to another cluster
+                          const otherCluster = !isAssignedToThis && clusters.find(c => c.id !== cluster.id && c.campaignAssignments.some(ca => ca.campaignId === campaign.id));
+                          
+                          return (
+                            <div 
+                              key={campaign.id}
+                              className={`flex items-center justify-between p-3 rounded border transition-all ${isAssignedToThis ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-200'}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <input 
+                                  type="checkbox"
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                  checked={isAssignedToThis}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      assignCampaignToCluster(cluster.id, campaign.id, 'NEW'); // Default to NEW
+                                    } else {
+                                      removeCampaignFromCluster(cluster.id, campaign.id);
+                                    }
+                                  }}
+                                />
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-sm font-medium ${isAssignedToThis ? 'text-indigo-900' : 'text-slate-700'}`}>
+                                      {campaign.name}
+                                    </span>
                                     <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${campaign.status === 'enabled' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                                       {campaign.status}
                                     </span>
                                   </div>
+                                  {otherCluster && (
+                                    <div className="flex items-center gap-1 text-xs text-amber-600 mt-0.5">
+                                      <AlertTriangle size={10} />
+                                      <span>Currently in <strong>{otherCluster.name}</strong></span>
+                                    </div>
+                                  )}
                                 </div>
-                                {assignedToOther && (
-                                  <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100">
-                                    <AlertTriangle size={12} />
-                                    <span>Moves from <strong>{otherGoalName}</strong></span>
-                                  </div>
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {assignedCampaigns.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {assignedCampaigns.map(c => (
-                                <span key={c.id} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                                  {c.name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-slate-500 italic">No campaigns currently optimizing toward this goal.</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                              </div>
 
-                    {/* Conversion Actions List */}
-                    <div className="mt-6 space-y-3">
-                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                        <Zap size={12} /> Included Conversion Actions
-                      </h4>
-                      <div className="space-y-2">
-                        {goal.conversionActions.map(action => (
-                          <div key={action.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200">
-                            <div className="flex items-center gap-3">
-                              <div className={`p-1.5 rounded ${action.sourceType === 'phone' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
-                                {action.sourceType === 'phone' ? <Megaphone size={14} /> : <Activity size={14} />}
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-slate-900">{action.name}</p>
-                                <p className="text-xs text-slate-400 font-mono">Event: {action.googleEventName}</p>
-                              </div>
+                              {isAssignedToThis && (
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs font-medium text-slate-500">Optimizes for:</label>
+                                  <select 
+                                    value={assignment.activeStage}
+                                    onChange={(e) => assignCampaignToCluster(cluster.id, campaign.id, e.target.value)}
+                                    className="text-xs border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 py-1 pl-2 pr-6"
+                                  >
+                                    <option value="NEW">New Lead</option>
+                                    <option value="QUALIFIED">Qualified Lead</option>
+                                    <option value="CONVERTED">Converted Lead</option>
+                                  </select>
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
-                              <span className="text-xs text-slate-500">{isActive ? 'Live' : 'Inactive'}</span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
+
+                    {/* 4. Goals & Conversion Actions */}
+                    <div className="mt-6 space-y-4">
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                        <Target size={14} /> Conversion Goals
+                      </h4>
+                      
+                      <div className="grid gap-4">
+                        {cluster.goals.map(goal => {
+                          const isNew = goal.stage === 'NEW';
+                          const isQual = goal.stage === 'QUALIFIED';
+                          const isConv = goal.stage === 'CONVERTED';
+                          
+                          // Optional: Highlight "Active Goal" based on assigned campaigns
+                          const campaignsOptimizingForThis = cluster.campaignAssignments.filter(ca => ca.activeStage === goal.stage).length;
+                          const isActive = campaignsOptimizingForThis > 0;
+
+                          return (
+                            <div key={goal.id} className={`bg-white border rounded-lg overflow-hidden ${isActive ? 'border-indigo-200 ring-1 ring-indigo-200' : 'border-gray-200'}`}>
+                              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-2 h-2 rounded-full ${isNew ? 'bg-blue-400' : isQual ? 'bg-purple-400' : 'bg-green-400'}`} />
+                                  <h5 className="font-semibold text-slate-900 text-sm">{goal.name}</h5>
+                                </div>
+                                {isActive && (
+                                  <span className="text-[10px] font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                                    {campaignsOptimizingForThis} Active Campaign{campaignsOptimizingForThis !== 1 && 's'}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <div className="p-4 space-y-3">
+                                {goal.conversionActions.map(action => (
+                                  <div key={action.id} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`p-1.5 rounded ${action.sourceType === 'phone' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
+                                        {action.sourceType === 'phone' ? <Megaphone size={14} /> : <Activity size={14} />}
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-medium text-slate-900">{action.name}</p>
+                                        <div className="flex items-center gap-2">
+                                          <p className="text-xs text-slate-400 font-mono">{action.googleEventName}</p>
+                                          <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded">{action.sourceType}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-3">
+                                      <div className="text-right">
+                                        <label className="text-[10px] text-slate-400 uppercase font-medium block">Value</label>
+                                        <div className="relative">
+                                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
+                                          <input 
+                                            type="number" 
+                                            value={action.value}
+                                            onChange={e => updateConversionActionValue(cluster.id, goal.id, action.id, parseFloat(e.target.value) || 0)}
+                                            className="w-20 py-1 pl-5 pr-2 text-sm border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500 text-right"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                   </div>
                 )}
               </div>
@@ -335,7 +576,7 @@ const ClientSignals = ({ client }) => {
         </div>
       </section>
 
-      {/* Placeholder for Meta */}
+      {/* Meta Ads Placeholder */}
       <section className="space-y-4 pt-4 border-t border-gray-200">
         <div className="flex items-center gap-2 opacity-60">
           <div className="bg-white p-1.5 rounded shadow-sm border border-gray-200 text-slate-600">
@@ -345,7 +586,6 @@ const ClientSignals = ({ client }) => {
           <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
         </div>
       </section>
-
     </div>
   );
 };
